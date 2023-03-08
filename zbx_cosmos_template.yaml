@@ -1,0 +1,1002 @@
+zabbix_export:
+  version: '6.4'
+  template_groups:
+    -
+      uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    -
+      uuid: 6315d91546c54e9db6fa3467e6786a8c
+      template: 'Cosmos Node'
+      name: 'Cosmos Node'
+      groups:
+        -
+          name: Templates
+      items:
+        -
+          uuid: b670404f29a74798bba8471972dc7cbc
+          name: 'Active Validators'
+          type: HTTP_AGENT
+          key: active_validators
+          delay: 10s
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - '$.body.validators[*].length()'
+          timeout: 5s
+          url: '{$NODE_ADDRESS}:{$API_PORT}/cosmos/staking/v1beta1/validators?status=BOND_STATUS_BONDED'
+          output_format: JSON
+        -
+          uuid: b1b04bf0bdef4f2c8a868e072ca2181e
+          name: 'Catching Up'
+          type: DEPENDENT
+          key: catching-up
+          delay: '0'
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.body.result.sync_info.catching_up
+          master_item:
+            key: rpc-status
+        -
+          uuid: c1cec1a35bb145aca4fcbf28e237f32e
+          name: 'Latest Block Delay'
+          type: CALCULATED
+          key: latest-block-delay
+          delay: 5s
+          units: s
+          params: 'last(//latest-block-timestamp,#1)-last(//latest-block-timestamp,#2)'
+          triggers:
+            -
+              uuid: 322f10b4e26f43afa3f334ddce763b47
+              expression: 'avg(/Cosmos Node/latest-block-delay,1m)>{$BLOCK_DELAY_WARN}'
+              name: 'Block Delay Warning'
+              opdata: 'Delay: {ITEM.LASTVALUE}'
+              priority: WARNING
+        -
+          uuid: 7390b7a453384a6a9ee8a88de28a2376
+          name: 'Latest Block Height'
+          type: DEPENDENT
+          key: latest-block-height
+          delay: '0'
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.body.result.sync_info.latest_block_height
+            -
+              type: JAVASCRIPT
+              parameters:
+                - 'return parseInt(value)'
+          master_item:
+            key: rpc-status
+        -
+          uuid: a05d7d8b4b6346ddbb488f738370d99d
+          name: 'Latest Block Timestamp'
+          type: DEPENDENT
+          key: latest-block-timestamp
+          delay: '0'
+          units: unixtime
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.body.result.sync_info.latest_block_time
+            -
+              type: JAVASCRIPT
+              parameters:
+                - 'return parseInt(Date.parse(value) / 1000)'
+          master_item:
+            key: rpc-status
+        -
+          uuid: bc65585e54734eab84ab3c801d3b6782
+          name: 'API Port Status'
+          type: SIMPLE
+          key: 'net.tcp.service[tcp,{$NODE_ADDRESS},{$API_PORT}]'
+          valuemap:
+            name: 'Service staus'
+          triggers:
+            -
+              uuid: 7bd196ed522341e799963373d557db03
+              expression: 'max(/Cosmos Node/net.tcp.service[tcp,{$NODE_ADDRESS},{$API_PORT}],#3)=0'
+              name: 'API Port Status Down'
+              priority: WARNING
+        -
+          uuid: 04029e2e7b1d4c0692e9b010d049c05e
+          name: 'gRPC Port Status'
+          type: SIMPLE
+          key: 'net.tcp.service[tcp,{$NODE_ADDRESS},{$GRPC_PORT}]'
+          valuemap:
+            name: 'Service staus'
+          triggers:
+            -
+              uuid: 09654eedb7324d41be64915748e12bf3
+              expression: 'max(/Cosmos Node/net.tcp.service[tcp,{$NODE_ADDRESS},{$GRPC_PORT}],#3)=0'
+              name: 'gRPC Port Status Down'
+              priority: WARNING
+        -
+          uuid: 83645420a2a447c78386c8e65c6808d1
+          name: 'P2P Port Status'
+          type: SIMPLE
+          key: 'net.tcp.service[tcp,{$NODE_ADDRESS},{$P2P_PORT}]'
+          valuemap:
+            name: 'Service staus'
+          triggers:
+            -
+              uuid: daf615207df04028ae94e0feeb456fbd
+              expression: 'max(/Cosmos Node/net.tcp.service[tcp,{$NODE_ADDRESS},{$P2P_PORT}],#3)=0'
+              name: 'P2P Port Status Down'
+              priority: HIGH
+        -
+          uuid: 464e3401bcb441d2af84ef8c2be2068b
+          name: 'RPC Port Status'
+          type: SIMPLE
+          key: 'net.tcp.service[tcp,{$NODE_ADDRESS},{$RPC_PORT}]'
+          valuemap:
+            name: 'Service staus'
+          triggers:
+            -
+              uuid: f4deee7da2e64521a4fc7f25e1542557
+              expression: 'max(/Cosmos Node/net.tcp.service[tcp,{$NODE_ADDRESS},{$RPC_PORT}],#3)=0'
+              name: 'RPC Port Status Down'
+              priority: HIGH
+        -
+          uuid: fa120f4c33fb422e842688530ba7f674
+          name: 'Number of Peers Inbound'
+          type: DEPENDENT
+          key: number-of-peers-in
+          delay: '0'
+          units: peers
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - '$.body.result.peers[?(@.is_outbound == ''false'')].length()'
+          master_item:
+            key: rpc-net-info
+        -
+          uuid: d65dedebb69c45459f46c564a3afeb45
+          name: 'Number of Peers Outbound'
+          type: DEPENDENT
+          key: number-of-peers-out
+          delay: '0'
+          units: peers
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - '$.body.result.peers[?(@.is_outbound == ''true'')].length()'
+          master_item:
+            key: rpc-net-info
+        -
+          uuid: b5b57dd7832f4b5ba0efd1469708a676
+          name: 'Net Info'
+          type: HTTP_AGENT
+          key: rpc-net-info
+          delay: 10s
+          trends: '0'
+          value_type: TEXT
+          timeout: 5s
+          url: '{$NODE_ADDRESS}:{$RPC_PORT}/net_info'
+          output_format: JSON
+        -
+          uuid: 49ce87729c624aa7ba928f3d65f9b39e
+          name: Status
+          type: HTTP_AGENT
+          key: rpc-status
+          delay: 5s
+          trends: '0'
+          value_type: TEXT
+          url: '{$NODE_ADDRESS}:{$RPC_PORT}/status'
+          output_format: JSON
+        -
+          uuid: 97d1132dd0fb4da280bb9cacf33a40d0
+          name: 'Validator Bond Status'
+          type: DEPENDENT
+          key: validator_bond
+          delay: '0'
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.body.validator.status
+          master_item:
+            key: validator_info
+        -
+          uuid: f3f7719f9d0a44c9889087b4d3540536
+          name: 'Validator Commision'
+          type: HTTP_AGENT
+          key: validator_commission
+          delay: 10s
+          value_type: FLOAT
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - '$.body.commission.commission[0].amount'
+            -
+              type: MULTIPLIER
+              parameters:
+                - '1.0E-6'
+          timeout: 5s
+          url: '{$NODE_ADDRESS}:{$API_PORT}/cosmos/distribution/v1beta1/validators/{$VALOPER}/commission'
+          output_format: JSON
+        -
+          uuid: 612a02acb1c94cef8d92d88bb347a46d
+          name: 'Validator Info'
+          type: HTTP_AGENT
+          key: validator_info
+          delay: 10s
+          trends: '0'
+          value_type: TEXT
+          timeout: 5s
+          url: '{$NODE_ADDRESS}:{$API_PORT}/cosmos/staking/v1beta1/validators/{$VALOPER}'
+          output_format: JSON
+        -
+          uuid: 40b957a0673a4c8d85437ba5850aac69
+          name: 'Validator Jail Status'
+          type: DEPENDENT
+          key: validator_jail
+          delay: '0'
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.body.validator.jailed
+          master_item:
+            key: validator_info
+          triggers:
+            -
+              uuid: 594bf8517b32443bb9f30e2be714bd35
+              expression: 'last(/Cosmos Node/validator_jail)="true"'
+              name: 'Validator Jail Status'
+              priority: DISASTER
+        -
+          uuid: 286b748ef15a453e95c16448b504187a
+          name: 'Validator Rewards'
+          type: HTTP_AGENT
+          key: validator_rewards
+          delay: 10s
+          value_type: FLOAT
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - '$.body.rewards.rewards[0].amount'
+            -
+              type: MULTIPLIER
+              parameters:
+                - '1.0E-6'
+          timeout: 5s
+          url: '{$NODE_ADDRESS}:{$API_PORT}/cosmos/distribution/v1beta1/validators/{$VALOPER}/outstanding_rewards'
+          output_format: JSON
+        -
+          uuid: 7ed322179e2b448c970f4e5f621a275a
+          name: 'Voting Power'
+          type: DEPENDENT
+          key: voting_power
+          delay: '0'
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.body.result.validator_info.voting_power
+            -
+              type: JAVASCRIPT
+              parameters:
+                - 'return Math.round(parseInt(value) / parseInt({$DENOM_FACTOR}))'
+          master_item:
+            key: rpc-status
+          triggers:
+            -
+              uuid: 1956c379fbcc429d9183788c60617812
+              expression: 'last(/Cosmos Node/voting_power)<last(/Cosmos Node/voting_power,#2)'
+              name: 'Voting Power Decrease'
+              opdata: 'Voting Power: {ITEM.VALUE}'
+              priority: INFO
+              type: MULTIPLE
+      macros:
+        -
+          macro: '{$API_PORT}'
+          value: '1317'
+          description: 'API node port to connect to, example: 1317'
+        -
+          macro: '{$BLOCK_DELAY_WARN}'
+          value: '30'
+          description: 'Block delay allowed before warning alert'
+        -
+          macro: '{$GRPC_PORT}'
+          value: '9090'
+          description: 'gRPC node port to connect to, example: 26657'
+        -
+          macro: '{$NODE_ADDRESS}'
+          description: 'IP or domain name of node'
+        -
+          macro: '{$P2P_PORT}'
+          value: '26656'
+          description: 'P2P node port to connect to, example: 26656'
+        -
+          macro: '{$RPC_PORT}'
+          value: '26657'
+          description: 'RPC node port to connect to, example: 26657'
+        -
+          macro: '{$VALOPER}'
+          description: 'Validator operator address'
+      dashboards:
+        -
+          uuid: c62a374657624da485135f71bed2e9d1
+          name: 'Cosmos Node'
+          auto_start: 'NO'
+          pages:
+            -
+              name: Status
+              widgets:
+                -
+                  type: item
+                  'y': '10'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: units_bold
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: decimal_size
+                      value: '15'
+                    -
+                      type: INTEGER
+                      name: value_size
+                      value: '15'
+                    -
+                      type: INTEGER
+                      name: units_show
+                      value: '0'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: validator_bond
+                -
+                  type: item
+                  x: '10'
+                  'y': '10'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: units_bold
+                      value: '0'
+                    -
+                      type: STRING
+                      name: units
+                      value: '!NLS'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: validator_commission
+                -
+                  type: item
+                  x: '15'
+                  'y': '10'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: units_bold
+                      value: '0'
+                    -
+                      type: STRING
+                      name: units
+                      value: '!NLS'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: validator_rewards
+                -
+                  type: item
+                  'y': '8'
+                  width: '24'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: desc_size
+                      value: '50'
+                    -
+                      type: STRING
+                      name: description
+                      value: |
+                        {$VALOPER} 
+                        Validator Status
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: rpc-status
+                -
+                  type: item
+                  x: '20'
+                  'y': '10'
+                  width: '4'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: units_show
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: units_bold
+                      value: '0'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: validator_jail
+                -
+                  type: item
+                  'y': '2'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '3'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: units_show
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: units_bold
+                      value: '0'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: latest-block-height
+                -
+                  type: item
+                  x: '5'
+                  'y': '2'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: units_show
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: units_bold
+                      value: '0'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: catching-up
+                -
+                  type: item
+                  'y': '5'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    -
+                      type: STRING
+                      name: thresholds.color.0
+                      value: 388E3C
+                    -
+                      type: STRING
+                      name: thresholds.color.1
+                      value: FB8C00
+                    -
+                      type: STRING
+                      name: thresholds.color.2
+                      value: D32F2F
+                    -
+                      type: STRING
+                      name: thresholds.threshold.0
+                      value: '0'
+                    -
+                      type: STRING
+                      name: thresholds.threshold.1
+                      value: '8'
+                    -
+                      type: STRING
+                      name: thresholds.threshold.2
+                      value: '10'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: latest-block-delay
+                -
+                  type: item
+                  x: '5'
+                  'y': '5'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: number-of-peers-in
+                -
+                  type: item
+                  width: '24'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: desc_size
+                      value: '50'
+                    -
+                      type: STRING
+                      name: description
+                      value: |
+                        {$NODE_ADDRESS}
+                        Node Status
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: rpc-status
+                -
+                  type: item
+                  x: '5'
+                  'y': '10'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    -
+                      type: STRING
+                      name: units
+                      value: '!NLS'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: voting_power
+                -
+                  type: item
+                  x: '10'
+                  'y': '5'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: number-of-peers-out
+                -
+                  type: item
+                  x: '16'
+                  'y': '2'
+                  width: '4'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: STRING
+                      name: thresholds.color.0
+                      value: C62828
+                    -
+                      type: STRING
+                      name: thresholds.threshold.0
+                      value: '0'
+                    -
+                      type: STRING
+                      name: thresholds.color.1
+                      value: 388E3C
+                    -
+                      type: STRING
+                      name: thresholds.threshold.1
+                      value: '1'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: 'net.tcp.service[tcp,{$NODE_ADDRESS},{$RPC_PORT}]'
+                -
+                  type: item
+                  x: '20'
+                  'y': '2'
+                  width: '4'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: STRING
+                      name: thresholds.color.0
+                      value: C62828
+                    -
+                      type: STRING
+                      name: thresholds.threshold.0
+                      value: '0'
+                    -
+                      type: STRING
+                      name: thresholds.color.1
+                      value: 388E3C
+                    -
+                      type: STRING
+                      name: thresholds.threshold.1
+                      value: '1'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: 'net.tcp.service[tcp,{$NODE_ADDRESS},{$API_PORT}]'
+                -
+                  type: item
+                  x: '16'
+                  'y': '5'
+                  width: '4'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: STRING
+                      name: thresholds.color.0
+                      value: C62828
+                    -
+                      type: STRING
+                      name: thresholds.threshold.0
+                      value: '0'
+                    -
+                      type: STRING
+                      name: thresholds.color.1
+                      value: 388E3C
+                    -
+                      type: STRING
+                      name: thresholds.threshold.1
+                      value: '1'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: 'net.tcp.service[tcp,{$NODE_ADDRESS},{$P2P_PORT}]'
+                -
+                  type: item
+                  x: '20'
+                  'y': '5'
+                  width: '4'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: STRING
+                      name: thresholds.color.0
+                      value: C62828
+                    -
+                      type: STRING
+                      name: thresholds.threshold.0
+                      value: '0'
+                    -
+                      type: STRING
+                      name: thresholds.color.1
+                      value: 388E3C
+                    -
+                      type: STRING
+                      name: thresholds.threshold.1
+                      value: '1'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: 'net.tcp.service[tcp,{$NODE_ADDRESS},{$GRPC_PORT}]'
+                -
+                  type: item
+                  x: '10'
+                  'y': '2'
+                  width: '5'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: show
+                      value: '2'
+                    -
+                      type: INTEGER
+                      name: adv_conf
+                      value: '1'
+                    -
+                      type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: units_show
+                      value: '0'
+                    -
+                      type: INTEGER
+                      name: units_bold
+                      value: '0'
+                    -
+                      type: ITEM
+                      name: itemid
+                      value:
+                        host: 'Cosmos Node'
+                        key: active_validators
+      valuemaps:
+        -
+          uuid: 6410e24185b841e79233df52cb8f3512
+          name: 'Service staus'
+          mappings:
+            -
+              value: '0'
+              newvalue: Down
+            -
+              value: '1'
+              newvalue: Up
